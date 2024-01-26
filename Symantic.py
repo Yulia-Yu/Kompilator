@@ -1,5 +1,6 @@
 class Symbol:
     name: str
+    type: str
 
 class SymTable:
     #data: OrderedDict[str, Symbol]
@@ -9,7 +10,7 @@ class SymTable:
         self.variables.append(name)
     #def Get(self, variable) -> Symbol: pass
     def check(self, variable):
-        if variable in self.variables:
-            return 'true'
-        else: return 'false'
+        return variable in self.variables
+
+
 
