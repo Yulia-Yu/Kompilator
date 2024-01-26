@@ -2,6 +2,7 @@ import sys
 from lex import Lexer, Token
 from Symantic import SymTable
 
+
 class Node:
     gen = ' '
     def __get_class_name(self):
@@ -42,16 +43,23 @@ class NodeProgram(Node):
         self.children = children
 
     def generate(self):
-        code = "void main(){\n"
+        code = ""
         for child in self.children:
-            code += f"{child.generate()};\n"
+            code += f"    {child.generate()}\n"
         return code
 
 
-class NodeBlock(NodeProgram): pass
+class NodeBlock(NodeProgram):
+    def __init__(self, tokens):
+        self.tokens = tokens
+        self.value = ""
+        for i in self.tokens:
+            self.value += i.value + "\n        "
+    pass
 
 
-class NodeElseBlock(NodeBlock): pass
+class NodeElseBlock(NodeBlock):
+    pass
 
 
 class NodeDeclaration(Node):
@@ -72,6 +80,7 @@ class NodeAssigning(Node):
         else:
             self.left_side = left_side
             self.right_side = right_side
+            self.value = self.left_side.id.value + " = " + self.right_side.value.value
     def generate(self):
         code = self.left_side.id.value + " = "
         code += self.right_side.value.value
@@ -102,12 +111,15 @@ class NodeParams(Node):
 
 
 
-class NodeFormalParams(NodeParams): pass
+class NodeFormalParams(NodeParams):
+    pass
 
 
-class NodeActualParams(NodeParams): pass
+class NodeActualParams(NodeParams):
+    pass
 
-
+class NodeLeftSkobka(Node):
+    pass
 class NodeIfConstruction(Node):
     def __init__(self, condition, block, else_block):
         self.condition = condition
@@ -115,9 +127,9 @@ class NodeIfConstruction(Node):
         self.else_block = else_block
 
     def generate(self):
-        code = "if " + "(" + self.condition + ")" + "{" + self.block + "}" + "else {" + self.else_block + "}"
-        for child in self.children:
-            code += f"{child.generate()};\n"
+        code = "if " + "(" + self.condition.value.value + "):\n" + "        " + self.block.value
+        if (self.else_block.value):
+            code += "\n    else:\n" + "        " + self.else_block.value
         return code
 
 
@@ -151,7 +163,10 @@ class NodeLiteral(Node):
 class NodeStringLiteral(NodeLiteral): pass
 
 
-class NodeIntLiteral(NodeLiteral): pass
+class NodeIntLiteral(NodeLiteral):
+    def __init__(self, value):
+        super().__init__(value)
+
 
 
 class NodeFloatLiteral(NodeLiteral): pass
@@ -160,6 +175,7 @@ class NodeFloatLiteral(NodeLiteral): pass
 class NodeVar(Node):
     def __init__(self, id):
         self.id = id
+        self.value = id
     def generate(self):
         code = self.id
         return code
@@ -185,7 +201,7 @@ class NodeFunctionCall(Node):
         self.id = id
         self.actual_params = actual_params
     def generate(self):
-        code = self.id + "(" + self.actual_params + ")";
+        code = self.id + "(" + self.actual_params + ")"
         for child in self.children:
             code += f"{child.generate()};\n"
         return code
@@ -197,18 +213,25 @@ class NodeIndexAccess(Node):
 
 
 class NodeUnaryOperator(Node):
-    def __init__(self, operand):
-        self.operand = operand
+
     def generate(self):
         code = self.operand
         for child in self.children:
             code += f"{child.generate()};\n"
         return code
 
-class NodeUnaryMinus(NodeUnaryOperator): pass
+
+class NodeUnaryMinus(NodeUnaryOperator):
+    def __init__(self, operand):
+        self.operand = operand
+        self.operand.value.value = "-" + operand.value.value
+        self.value = self.operand.value
+    pass
 
 
-class NodeNot(NodeUnaryOperator): pass
+class NodeNot(NodeUnaryOperator):
+
+    pass
 
 
 class NodeBinaryOperator(Node):
@@ -217,53 +240,119 @@ class NodeBinaryOperator(Node):
         self.right = right
 
 
-class NodeL(NodeBinaryOperator): pass
+class NodeL(NodeBinaryOperator):
+    pass
 
 
-class NodeG(NodeBinaryOperator): pass
+class NodeG(NodeBinaryOperator):
+    pass
 
 
-class NodeLE(NodeBinaryOperator): pass
+class NodeLE(NodeBinaryOperator):
+    pass
 
 
-class NodeGE(NodeBinaryOperator): pass
+class NodeGE(NodeBinaryOperator):
+    pass
 
 
-class NodeEQ(NodeBinaryOperator): pass
+class NodeEQ(NodeBinaryOperator):
+    def __init__(self, left, right):
+        super().__init__(left, right)
+        self.left = left
+        self.right = right
+        self.left.value.value = self.left.value.value + " == " + self.right.value.value
+        self.value = left.value
+    pass
 
 
-class NodeNEQ(NodeBinaryOperator): pass
+class NodeNEQ(NodeBinaryOperator):
+    def __init__(self, left, right):
+        super().__init__(left, right)
+        self.left = left
+        self.right = right
+        self.left.value.value = "not (" + self.left.value.value + " == " + self.right.value.value + ")"
+        self.value = left.value
 
 
-class NodeOr(NodeBinaryOperator): pass
+class NodeOr(NodeBinaryOperator):
+    def __init__(self, left, right):
+        super().__init__(left, right)
+        self.left = left
+        self.right = right
+        self.left.value.value = self.left.value.value + " or " + self.right.value.value
+        self.value = left.value
+    pass
 
 
-class NodeAnd(NodeBinaryOperator): pass
+class NodeAnd(NodeBinaryOperator):
+    def __init__(self, left, right):
+        super().__init__(left, right)
+        self.left = left
+        self.right = right
+        self.left.value.value = self.left.value.value + " and " + self.right.value.value
+        self.value = left.value
+    pass
 
 
-class NodePlus(NodeBinaryOperator): pass
+class NodePlus(NodeBinaryOperator):
+    def __init__(self, left, right):
+        super().__init__(left, right)
+        self.left = left
+        self.right = right
+        self.left.value.value = self.left.value.value + " + " + self.right.value.value
+        self.value = left.value
 
 
 
-class NodeMinus(NodeBinaryOperator): pass
+class NodeMinus(NodeBinaryOperator):
+    def __init__(self, left, right):
+        super().__init__(left, right)
+        self.left = left
+        self.right = right
+        self.left.value.value = self.left.value.value + " - " + self.right.value.value
+        self.value = left.value
+    pass
 
 
-class NodeDivision(NodeBinaryOperator): pass
+class NodeDivision(NodeBinaryOperator):
+    def __init__(self, left, right):
+        super().__init__(left, right)
+        self.left = left
+        self.right = right
+        self.left.value.value = self.left.value.value + " / " + self.right.value.value
+        self.value = left.value
+    pass
 
 
-class NodeMultiply(NodeBinaryOperator): pass
+class NodeMultiply(NodeBinaryOperator):
+    def __init__(self, left, right):
+        super().__init__(left, right)
+        self.left = left
+        self.right = right
+        self.left.value.value = self.left.value.value + " * " + self.right.value.value
+        self.value = left.value
 
 
-class NodeIDivision(NodeBinaryOperator): pass
+
+class NodeIDivision(NodeBinaryOperator):
+
+    pass
 
 
-class NodeMod(NodeBinaryOperator): pass
+class NodeMod(NodeBinaryOperator):
+    def __init__(self, left, right):
+        super().__init__(left, right)
+        self.left = left
+        self.right = right
+        self.left.value.value = self.left.value.value + " % " + self.right.value.value
+        self.value = left.value
+    pass
 
 s_table = SymTable()
 
 class Parser:
     def __init__(self, lexer: Lexer):
-
         #self.s_table = SymTable()
         self.lexer = lexer
         self.token = self.lexer.get_next_token()
@@ -321,7 +410,7 @@ class Parser:
             self.next_token()
             return NodeIntLiteral(first_token)
         if self.token.name == Token.ID:
-            if s_table.check(first_token.value) == 'false':
+            if not s_table.check(first_token.value):
                 return 'Ukk'
             self.next_token()
             if self.token.name == Token.LBR:
@@ -343,7 +432,8 @@ class Parser:
                 self.next_token()
                 return expression
 
-            else: return NodeVar(first_token)
+            else:
+                return NodeVar(first_token)
 
     def factor(self) -> Node:
         if self.token.name == Token.MINUS:
@@ -404,11 +494,11 @@ class Parser:
                 left = NodeG(left, self.expression())
             if op == Token.LE:
                 left = NodeLE(left, self.expression())
-            if op ==  Token.GE:
+            if op == Token.GE:
                 left = NodeGE(left, self.expression())
-            if op ==  Token.EQ:
+            if op == Token.EQ:
                 left = NodeEQ(left, self.expression())
-            if op ==  Token.NEQ:
+            if op == Token.NEQ:
                     left = NodeNEQ(left, self.expression())
             op = self.token.name
         return left
@@ -471,7 +561,8 @@ class Parser:
         if self.token.name == Token.ID:
             first_token = self.token
             self.next_token()
-            if s_table.check(first_token.value) == 'false':
+            if not s_table.check(first_token.value):
+                self.error("Ожидалось объявление переменной, присваивание или вызов функции!")
                 return 'Ukk'
             # например int abc
             if self.token.name == Token.ID:
@@ -564,7 +655,7 @@ class Parser:
             self.next_token()
             return NodeIfConstruction(condition, block, else_block)
 
-        if self.token.name ==  Token.WHILE:
+        if self.token.name == Token.WHILE:
             self.next_token()
             condition = self.condition()
             self.require(Token.LCBR)
@@ -574,7 +665,7 @@ class Parser:
             self.next_token()
             return NodeWhileConstruction(condition, block)
 
-        if self.token.name ==  Token.RETURN:
+        if self.token.name == Token.RETURN:
             self.next_token()
             expression = self.expression()
             return NodeReturnStatement(expression)
@@ -588,15 +679,7 @@ class Parser:
                 statements.append(self.statement())
                 self.require(Token.SEMI)
                 self.next_token()
+            print(s_table.variables)
             return NodeProgram(statements)
 
-    def gen(self) -> Node:
-        if self.token.name == Token.EOF:
-            self.error("Пустой файл!")
-        else:
-            statements = []
-            while self.token.name != Token.EOF:
-                statements.append(self.statement())
-                self.require(Token.SEMI)
-                self.next_token()
-            return NodeProgram(statements).generate()
+

@@ -6,14 +6,14 @@ class Token:
     PLUS, MINUS, ASTERISK, SLASH, DSLASH, \
     PERCENT, LBR, RBR, LCBR, RCBR, LSBR, \
     RSBR, LE, GE, SEMI, COMMA, \
-    WHILE, RETURN, SUB, IF, ELSE, \
-    OR, AND, NOT, DOG, DOL = range(35)
+    WHILE, RETURN, SUB, IF, ELSE, FUNCTION,\
+    OR, AND, NOT, DOG, DOL = range(36)
 
     token_names = {
         EOF: "EOF",
+        STRING_LITERAL: "STRING_LITERAL",
         ID: "ID",
         INT_LITERAL: "INT_LITERAL",
-        STRING_LITERAL: "STRING_LITERAL",
         ASSIGN: "ASSIGN '='",
         L: "L '<'",
         G: "G '>'",
@@ -36,8 +36,12 @@ class Token:
         COMMA: "COMMA ','",
         WHILE: "WHILE",
         RETURN: "RETURN",
-        3: "SUB",
+        SUB: "SUB",
         IF: "IF",
+        ELSE: "ELSE",
+        OR: "OR",
+        AND: "AND",
+        NOT: "NOT",
         DOG: "@",
         DOL: "$"
     }
@@ -70,6 +74,7 @@ class Lexer:
         self.pos = 1
         self.state = None
         self.char = None
+        self.tokens = []
 
     def __get_next_char(self):
         self.char = self.file.read(1)
@@ -92,21 +97,27 @@ class Lexer:
                     self.__get_next_char()
                     return self.get_next_token()
                 elif self.char == '':
+                    self.tokens.append(Token(Token.EOF, "", self.lineno, self.pos))
                     return Token(Token.EOF, "", self.lineno, self.pos)
                 elif self.char == '+':
                     self.__get_next_char()
+                    self.tokens.append(Token(Token.PLUS, "+", self.lineno, self.pos))
                     return Token(Token.PLUS, "+", self.lineno, self.pos)
                 elif self.char == '-':
                     self.__get_next_char()
+                    self.tokens.append(Token(Token.MINUS, "-", self.lineno, self.pos))
                     return Token(Token.MINUS, "-", self.lineno, self.pos)
                 elif self.char == '*':
                     self.__get_next_char()
+                    self.tokens.append(Token(Token.ASTERISK, "*", self.lineno, self.pos))
                     return Token(Token.ASTERISK, "*", self.lineno, self.pos)
                 elif self.char == '%':
                     self.__get_next_char()
+                    self.tokens.append(Token(Token.PERCENT, "%", self.lineno, self.pos))
                     return Token(Token.PERCENT, "%", self.lineno, self.pos)
                 elif self.char == '(':
                     self.__get_next_char()
+                    self.tokens.append(Token(Token.LBR, "(", self.lineno, self.pos))
                     return Token(Token.LBR, "(", self.lineno, self.pos)
                 elif self.char == ')':
                     self.__get_next_char()
