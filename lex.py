@@ -11,9 +11,9 @@ class Token:
 
     token_names = {
         EOF: "EOF",
+        STRING_LITERAL: "STRING_LITERAL",
         ID: "ID",
         INT_LITERAL: "INT_LITERAL",
-        STRING_LITERAL: "STRING_LITERAL",
         ASSIGN: "ASSIGN '='",
         L: "L '<'",
         G: "G '>'",
@@ -36,8 +36,12 @@ class Token:
         COMMA: "COMMA ','",
         WHILE: "WHILE",
         RETURN: "RETURN",
-        3: "SUB",
+        SUB: "SUB",
         IF: "IF",
+        ELSE: "ELSE",
+        OR: "OR",
+        AND: "AND",
+        NOT: "NOT",
         DOG: "@",
         DOL: "$"
     }
