@@ -1,6 +1,6 @@
 import sys
 from lex import Lexer, Token
-from Symantic import SymTable
+from Symantic import SymTable, Symbol
 
 class Node:
     gen = ' '
@@ -42,13 +42,19 @@ class NodeProgram(Node):
         self.children = children
 
     def generate(self):
-        code = "void main(){\n"
+        code = ""
         for child in self.children:
-            code += f"{child.generate()};\n"
+            code += f"    {child.generate()}\n"
         return code
 
 
-class NodeBlock(NodeProgram): pass
+class NodeBlock(NodeProgram):
+    def __init__(self, tokens):
+        self.tokens = tokens
+        self.value = ""
+        for i in self.tokens:
+            self.value += i.value + "\n        "
+
 
 
 class NodeElseBlock(NodeBlock): pass
@@ -67,15 +73,34 @@ class NodeDeclaration(Node):
 
 class NodeAssigning(Node):
     def __init__(self, left_side, right_side):
-        if left_side == 'Ukk' or right_side == 'Ukk':
-            print('Переменная не объявлена')
-        else:
             self.left_side = left_side
             self.right_side = right_side
+
+            if 'NodeSequence' in str(right_side):
+                name = left_side.id.value
+                s_table.update_type(name, 'mas')
+            elif '+-right' in str(right_side):
+                name = left_side.id.value
+                if 'INT_LITERAL' in str(right_side.right.value):
+                    s_table.update_type(name, 'int')
+                elif 'STRING_LITERAL' in str(right_side.right.value):
+                    s_table.update_type(name, 'string')
+            elif  not 'right_side' in str(right_side):
+                name = left_side.id.value
+                if 'INT_LITERAL' in str(right_side.value):
+                    s_table.update_type(name, 'int')
+                elif 'STRING_LITERAL' in str(right_side.value):
+                    s_table.update_type(name, 'string')
+
+            self.left_side = left_side
+            self.right_side = right_side
+            self.value = self.left_side.id.value + " = " + self.right_side.value.value
+
     def generate(self):
         code = self.left_side.id.value + " = "
         code += self.right_side.value.value
         return code
+
 
 class NodeFunction(Node):
     def __init__(self, ret_type, id, formal_params, block):
@@ -85,15 +110,23 @@ class NodeFunction(Node):
         self.block = block
 
         def generate(self):
-            code = "void " + self.id + "(" + self.formal_params + ")" + "{" + self.block + "}"
+            code = "def " + self.id + "(" + self.formal_params + ")" + "{" + self.block + "}"
             for child in self.children:
                 code += f"{child.generate()};\n"
             return code
 
 
 class NodeSequence(Node):
-    def __init__(self, members):
+    def init(self, members):
         self.members = members
+        #self.value = members
+        temp = "["
+        for i in self.members:
+            temp += i.value.value + ", "
+        temp = temp[:-2]
+        temp += "]"
+        self.members[0].value = temp
+        self.value = self.members[0]
 
 
 class NodeParams(Node):
@@ -107,6 +140,9 @@ class NodeFormalParams(NodeParams): pass
 
 class NodeActualParams(NodeParams): pass
 
+class NodeLeftSkobka(Node):
+    pass
+
 
 class NodeIfConstruction(Node):
     def __init__(self, condition, block, else_block):
@@ -115,9 +151,9 @@ class NodeIfConstruction(Node):
         self.else_block = else_block
 
     def generate(self):
-        code = "if " + "(" + self.condition + ")" + "{" + self.block + "}" + "else {" + self.else_block + "}"
-        for child in self.children:
-            code += f"{child.generate()};\n"
+        code = "if " + "(" + self.condition.value.value + "):\n" + "        " + self.block.value
+        if (self.else_block.value):
+            code += "\n    else:\n" + "        " + self.else_block.value
         return code
 
 
@@ -127,9 +163,7 @@ class NodeWhileConstruction(Node):
         self.block = block
 
     def generate(self):
-        code = "while " + "(" + self.condition + ")" + "{" + self.block + "}"
-        for child in self.children:
-            code += f"{child.generate()};\n"
+        code = "while " + "(" + self.condition.value.value + "):\n" + "        " + self.block.value
         return code
 
 class NodeReturnStatement(Node):
@@ -148,10 +182,14 @@ class NodeLiteral(Node):
         code = self.value
         return code
 
-class NodeStringLiteral(NodeLiteral): pass
+class NodeStringLiteral(NodeLiteral):
+    def __init__(self, value):
+        super().__init__(value)
 
 
-class NodeIntLiteral(NodeLiteral): pass
+class NodeIntLiteral(NodeLiteral):
+    def __init__(self, value):
+        super().__init__(value)
 
 
 class NodeFloatLiteral(NodeLiteral): pass
@@ -160,6 +198,7 @@ class NodeFloatLiteral(NodeLiteral): pass
 class NodeVar(Node):
     def __init__(self, id):
         self.id = id
+        self.value = id
     def generate(self):
         code = self.id
         return code
@@ -205,7 +244,11 @@ class NodeUnaryOperator(Node):
             code += f"{child.generate()};\n"
         return code
 
-class NodeUnaryMinus(NodeUnaryOperator): pass
+class NodeUnaryMinus(NodeUnaryOperator):
+    def __init__(self, operand):
+        self.operand = operand
+        self.operand.value.value = "-" + operand.value.value
+        self.value = self.operand.value
 
 
 class NodeNot(NodeUnaryOperator): pass
@@ -217,47 +260,338 @@ class NodeBinaryOperator(Node):
         self.right = right
 
 
-class NodeL(NodeBinaryOperator): pass
+class NodeL(NodeBinaryOperator):
+    def __init__(self, left, right):
+        super().__init__(left, right)
+        self.left = left
+        self.right = right
+
+        if left.value.value in s_table.variables:
+            type_1 = s_table.get_type(left.value.value)
+        elif 'INT_LITERAL' in str(left.value):
+            type_1 = 'int'
+        elif 'STRING_LITERAL' in str(left.value):
+            type_1 = 'string'
+
+        if right.value.value in s_table.variables:
+            type_2 = s_table.get_type(right.value.value)
+        elif 'INT_LITERAL' in str(right.value):
+            type_2 = 'int'
+        elif 'STRING_LITERAL' in str(right.value):
+            type_2 = 'string'
 
 
-class NodeG(NodeBinaryOperator): pass
+        if str(type_1) != str(type_2):
+            print("Ошибка: несовпадение типов данных при сравнении!")
+            sys.exit(1)
 
 
-class NodeLE(NodeBinaryOperator): pass
+        self.left.value.value = self.left.value.value + " < " + self.right.value.value
+        self.value = left.value
+
+class NodeG(NodeBinaryOperator):
+    def __init__(self, left, right):
+        super().__init__(left, right)
+        self.left = left
+        self.right = right
+
+        if left.value.value in s_table.variables:
+            type_1 = s_table.get_type(left.value.value)
+        elif 'INT_LITERAL' in str(left.value):
+            type_1 = 'int'
+        elif 'STRING_LITERAL' in str(left.value):
+            type_1 = 'string'
+
+        if right.value.value in s_table.variables:
+            type_2 = s_table.get_type(right.value.value)
+        elif 'INT_LITERAL' in str(right.value):
+            type_2 = 'int'
+        elif 'STRING_LITERAL' in str(right.value):
+            type_2 = 'string'
 
 
-class NodeGE(NodeBinaryOperator): pass
+        if str(type_1) != str(type_2):
+            print("Ошибка: несовпадение типов данных при сравнении!")
+            sys.exit(1)
 
 
-class NodeEQ(NodeBinaryOperator): pass
+        self.left.value.value = self.left.value.value + " > " + self.right.value.value
+        self.value = left.value
+
+class NodeLE(NodeBinaryOperator):
+    def __init__(self, left, right):
+        super().__init__(left, right)
+        self.left = left
+        self.right = right
+
+        if left.value.value in s_table.variables:
+            type_1 = s_table.get_type(left.value.value)
+        elif 'INT_LITERAL' in str(left.value):
+            type_1 = 'int'
+        elif 'STRING_LITERAL' in str(left.value):
+            type_1 = 'string'
+
+        if right.value.value in s_table.variables:
+            type_2 = s_table.get_type(right.value.value)
+        elif 'INT_LITERAL' in str(right.value):
+            type_2 = 'int'
+        elif 'STRING_LITERAL' in str(right.value):
+            type_2 = 'string'
 
 
-class NodeNEQ(NodeBinaryOperator): pass
+        if str(type_1) != str(type_2):
+            print("Ошибка: несовпадение типов данных при сравнении!")
+            sys.exit(1)
 
 
-class NodeOr(NodeBinaryOperator): pass
+        self.left.value.value = self.left.value.value + " <= " + self.right.value.value
+        self.value = left.value
 
 
-class NodeAnd(NodeBinaryOperator): pass
+class NodeGE(NodeBinaryOperator):
+    def __init__(self, left, right):
+        super().__init__(left, right)
+        self.left = left
+        self.right = right
+
+        if left.value.value in s_table.variables:
+            type_1 = s_table.get_type(left.value.value)
+        elif 'INT_LITERAL' in str(left.value):
+            type_1 = 'int'
+        elif 'STRING_LITERAL' in str(left.value):
+            type_1 = 'string'
+
+        if right.value.value in s_table.variables:
+            type_2 = s_table.get_type(right.value.value)
+        elif 'INT_LITERAL' in str(right.value):
+            type_2 = 'int'
+        elif 'STRING_LITERAL' in str(right.value):
+            type_2 = 'string'
 
 
-class NodePlus(NodeBinaryOperator): pass
+        if str(type_1) != str(type_2):
+            print("Ошибка: несовпадение типов данных при сравнении!")
+            sys.exit(1)
+
+
+        self.left.value.value = self.left.value.value + " >= " + self.right.value.value
+        self.value = left.value
+
+
+class NodeEQ(NodeBinaryOperator):
+    def __init__(self, left, right):
+        super().__init__(left, right)
+        self.left = left
+        self.right = right
+        self.left.value.value = self.left.value.value + " == " + self.right.value.value
+        self.value = left.value
+
+
+class NodeNEQ(NodeBinaryOperator):
+    def __init__(self, left, right):
+        super().__init__(left, right)
+        self.left = left
+        self.right = right
+        self.left.value.value = "not (" + self.left.value.value + " == " + self.right.value.value + ")"
+        self.value = left.value
+
+
+class NodeOr(NodeBinaryOperator):
+    def __init__(self, left, right):
+        super().__init__(left, right)
+        self.left = left
+        self.right = right
+        self.left.value.value = self.left.value.value + " or " + self.right.value.value
+        self.value = left.value
+
+
+class NodeAnd(NodeBinaryOperator):
+    def __init__(self, left, right):
+        super().__init__(left, right)
+        self.left = left
+        self.right = right
+        self.left.value.value = self.left.value.value + " and " + self.right.value.value
+        self.value = left.value
+
+
+class NodePlus(NodeBinaryOperator):
+    def __init__(self, left, right):
+        super().__init__(left, right)
+        self.left = left
+        self.right = right
+
+        #print(left)
+        #print(right.value.value)
+        type_1 = None
+        type_2 = None
+
+        #if (type_1 == None or type_2 == None):
+        if left.value.value in s_table.variables:
+            type_1 = s_table.get_type(left.value.value)
+        elif 'INT_LITERAL' in str(left.value):
+            type_1 = 'int'
+        elif 'STRING_LITERAL' in str(left.value):
+            type_1 = 'string'
+
+        if right.value.value in s_table.variables:
+            type_2 = s_table.get_type(right.value.value)
+        elif 'INT_LITERAL' in str(right.value):
+            type_2 = 'int'
+        elif 'STRING_LITERAL' in str(right.value):
+            type_2 = 'string'
+
+
+        if str(type_1) != str(type_2):
+            print("Ошибка: несовпадение типов данных при сложении!")
+            sys.exit(1)
+
+
+        self.left.value.value = self.left.value.value + " + " + self.right.value.value
+        self.value = left.value
 
 
 
-class NodeMinus(NodeBinaryOperator): pass
 
 
-class NodeDivision(NodeBinaryOperator): pass
+class NodeMinus(NodeBinaryOperator):
+    def __init__(self, left, right):
+        super().__init__(left, right)
+        self.left = left
+        self.right = right
+
+        type_1 = None
+        type_2 = None
+
+        if left.value.value in s_table.variables:
+            type_1 = s_table.get_type(left.value.value)
+        elif 'INT_LITERAL' in str(left.value):
+            type_1 = 'int'
+        elif 'STRING_LITERAL' in str(left.value):
+            type_1 = 'string'
+
+        if right.value.value in s_table.variables:
+            type_2 = s_table.get_type(right.value.value)
+        elif 'INT_LITERAL' in str(right.value):
+            type_2 = 'int'
+        elif 'STRING_LITERAL' in str(right.value):
+            type_2 = 'string'
+
+        if str(type_1) != str(type_2):
+            print("Ошибка: несовпадение типов данных при вычитании!")
+            sys.exit(1)
+        elif str(type_1) == 'string':
+            print("Ошибка: нельзя вычитать из типа string!")
+            sys.exit(1)
+        elif str(type_1) == 'mas':
+            print("Ошибка: нельзя вычитать массивы!")
+            sys.exit(1)
+
+        self.left.value.value = self.left.value.value + " - " + self.right.value.value
+        self.value = left.value
 
 
-class NodeMultiply(NodeBinaryOperator): pass
+class NodeDivision(NodeBinaryOperator):
+    def __init__(self, left, right):
+        super().__init__(left, right)
+        self.left = left
+        self.right = right
+
+        if left.value.value in s_table.variables:
+            type_1 = s_table.get_type(left.value.value)
+        elif 'INT_LITERAL' in str(left.value):
+            type_1 = 'int'
+        elif 'STRING_LITERAL' in str(left.value):
+            type_1 = 'string'
+
+        if right.value.value in s_table.variables:
+            type_2 = s_table.get_type(right.value.value)
+        elif 'INT_LITERAL' in str(right.value):
+            type_2 = 'int'
+        elif 'STRING_LITERAL' in str(right.value):
+            type_2 = 'string'
+
+        if str(type_1) != str(type_2):
+            print("Ошибка: несовпадение типов данных при делении!")
+            sys.exit(1)
+        elif str(type_1) == 'string':
+            print("Ошибка: нельзя делить тип string!")
+            sys.exit(1)
+        elif str(type_1) == 'mas':
+            print("Ошибка: нельзя делить массивы!")
+            sys.exit(1)
+
+        self.left.value.value = self.left.value.value + " / " + self.right.value.value
+        self.value = left.value
+
+
+class NodeMultiply(NodeBinaryOperator):
+    def __init__(self, left, right):
+        super().__init__(left, right)
+        self.left = left
+        self.right = right
+
+        if left.value.value in s_table.variables:
+            type_1 = s_table.get_type(left.value.value)
+        elif 'INT_LITERAL' in str(left.value):
+            type_1 = 'int'
+        elif 'STRING_LITERAL' in str(left.value):
+            type_1 = 'string'
+
+        if right.value.value in s_table.variables:
+            type_2 = s_table.get_type(right.value.value)
+        elif 'INT_LITERAL' in str(right.value):
+            type_2 = 'int'
+        elif 'STRING_LITERAL' in str(right.value):
+            type_2 = 'string'
+
+
+        if str(type_1) == str(type_2) and str(type_1) == 'string':
+            print("Ошибка: нельзя умножать тип srtring на string!")
+            sys.exit(1)
+        elif str(type_1) == 'mas':
+            print("Ошибка: нельзя умножать массивы!")
+            sys.exit(1)
+
+
+        self.left.value.value = self.left.value.value + " * " + self.right.value.value
+        self.value = left.value
 
 
 class NodeIDivision(NodeBinaryOperator): pass
 
 
-class NodeMod(NodeBinaryOperator): pass
+class NodeMod(NodeBinaryOperator):
+    def __init__(self, left, right):
+        super().__init__(left, right)
+        self.left = left
+        self.right = right
+
+        if left.value.value in s_table.variables:
+            type_1 = s_table.get_type(left.value.value)
+        elif 'INT_LITERAL' in str(left.value):
+            type_1 = 'int'
+        elif 'STRING_LITERAL' in str(left.value):
+            type_1 = 'string'
+
+        if right.value.value in s_table.variables:
+            type_2 = s_table.get_type(right.value.value)
+        elif 'INT_LITERAL' in str(right.value):
+            type_2 = 'int'
+        elif 'STRING_LITERAL' in str(right.value):
+            type_2 = 'string'
+
+        if str(type_1) != str(type_2):
+            print("Ошибка: несовпадение типов данных при делении!")
+            sys.exit(1)
+        elif str(type_1) == 'string':
+            print("Ошибка: нельзя делить тип string!")
+            sys.exit(1)
+        elif str(type_1) == 'mas':
+            print("Ошибка: нельзя делить массивы!")
+            sys.exit(1)
+
+        self.left.value.value = self.left.value.value + " % " + self.right.value.value
+        self.value = left.value
 
 s_table = SymTable()
 
@@ -321,7 +655,8 @@ class Parser:
             self.next_token()
             return NodeIntLiteral(first_token)
         if self.token.name == Token.ID:
-            if s_table.check(first_token.value) == 'false':
+            if s_table.check(first_token.value) == False:
+                self.error(f"Переменная {first_token.value} не объявлена!")
                 return 'Ukk'
             self.next_token()
             if self.token.name == Token.LBR:
@@ -464,14 +799,17 @@ class Parser:
         # declaration | assigning | function-call
         if self.token.name == Token.DOL:
             self.next_token()
-            s_table.Add(self.token.value)
+            symbol = Symbol(name=self.token.value, type="-")
+            s_table.Add(symbol)
         if self.token.name == Token.DOG:
             self.next_token()
-            s_table.Add(self.token.value)
+            symbol = Symbol(name=self.token.value, type="-")
+            s_table.Add(symbol)
         if self.token.name == Token.ID:
             first_token = self.token
             self.next_token()
-            if s_table.check(first_token.value) == 'false':
+            if s_table.check(first_token.value) == False:
+                self.error(f"Переменная {first_token.value} не объявлена!")
                 return 'Ukk'
             # например int abc
             if self.token.name == Token.ID:
@@ -590,13 +928,4 @@ class Parser:
                 self.next_token()
             return NodeProgram(statements)
 
-    def gen(self) -> Node:
-        if self.token.name == Token.EOF:
-            self.error("Пустой файл!")
-        else:
-            statements = []
-            while self.token.name != Token.EOF:
-                statements.append(self.statement())
-                self.require(Token.SEMI)
-                self.next_token()
-            return NodeProgram(statements).generate()
+
