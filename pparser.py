@@ -117,7 +117,7 @@ class NodeFunction(Node):
 
 
 class NodeSequence(Node):
-    def init(self, members):
+    def __init__(self, members):
         self.members = members
         #self.value = members
         temp = "["
